@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
+require('./models/Submission');
 
 dotenv.config({ path: path.join(__dirname, 'config', 'config.env') });
 
