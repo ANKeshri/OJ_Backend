@@ -51,17 +51,11 @@ router.get('/', async (req, res) => {
               problems = problems.filter(p => !solvedProblemIds.has(p._id.toString()));
             }
           } catch (err) {
-            // If token is invalid, return message to login
-            return res.status(401).json({ message: 'login to solve questions' });
+            // If token is invalid, ignore solved filter and return all problems
           }
-        } else {
-          // If no token provided, return message to login
-          return res.status(401).json({ message: 'login to solve questions' });
         }
-      } else {
-        // If no auth header, return message to login
-        return res.status(401).json({ message: 'login to solve questions' });
       }
+      // If no auth header or token, ignore solved filter and return all problems
     }
     res.json(problems);
   } catch (err) {
