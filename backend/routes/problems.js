@@ -66,14 +66,56 @@ router.get('/:id/status', auth, async (req, res) => {
   try {
     const userId = req.user.id;
     const problemId = req.params.id;
-    const submission = await Submission.findOne({ user: userId, problem: problemId, status: 'Submitted' });
-    if (submission) {
-      return res.json({ status: 'Submitted' });
+    
+    // Get the latest submission (successful or failed)
+    const latestSubmission = await Submission.findOne({ 
+      user: userId, 
+      problem: problemId 
+    }).sort({ createdAt: -1 });
+    
+    // Also check if there's any successful submission
+    const successfulSubmission = await Submission.findOne({ 
+      user: userId, 
+      problem: problemId, 
+      status: 'Submitted' 
+    });
+    
+    if (latestSubmission) {
+      return res.json({ 
+        status: successfulSubmission ? 'Submitted' : latestSubmission.status,
+        lastAttemptStatus: latestSubmission.status,
+        submittedAt: latestSubmission.createdAt,
+        submissionId: latestSubmission._id,
+        hasSuccessfulSubmission: !!successfulSubmission
+      });
     } else {
       return res.json({ status: 'Not Attempted' });
     }
   } catch (err) {
     return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+// Get all submissions for a specific problem by the logged-in user
+router.get('/:id/submissions', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const problemId = req.params.id;
+    
+    const submissions = await Submission.find({ 
+      user: userId, 
+      problem: problemId 
+    }).sort({ createdAt: -1 });
+    
+    const submissionData = submissions.map(sub => ({
+      _id: sub._id,
+      language: sub.language,
+      status: sub.status,
+      submittedAt: sub.createdAt
+    }));
+    
+    res.json(submissionData);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 // Get a single problem by ID
@@ -158,18 +200,25 @@ router.post('/:id/submit', auth, async (req, res) => {
       }
     }));
     const allPassed = results.every(r => r.passed);
-    // If all passed, record submission
-    if (allPassed) {
-      try {
-        const result = await Submission.findOneAndUpdate(
-          { user: userId, problem: problem._id },
-          { code, language, status: 'Submitted', createdAt: new Date() },
-          { upsert: true, new: true }
-        );
-      } catch (err) {
-        // Silently handle submission save errors
-      }
+    
+    // Save all submission attempts (both successful and failed)
+    try {
+      const status = allPassed ? 'Submitted' : 'Failed';
+      const newSubmission = new Submission({
+        user: userId,
+        problem: problem._id,
+        code,
+        language,
+        status,
+        testResults: results,
+        createdAt: new Date()
+      });
+      await newSubmission.save();
+    } catch (err) {
+      // Silently handle submission save errors
+      console.error('Error saving submission:', err);
     }
+    
     res.json({ results, allPassed });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -189,8 +238,71 @@ router.get('/user/statistics', auth, async (req, res) => {
   try {
     const userId = req.user.id;
     const total = await Problem.countDocuments();
-    const solved = await Submission.countDocuments({ user: userId, status: 'Submitted' });
+    
+    // Count unique problems solved (distinct problem IDs with status 'Submitted')
+    const solvedProblems = await Submission.distinct('problem', { user: userId, status: 'Submitted' });
+    const solved = solvedProblems.length;
+    
     res.json({ total, solved, remaining: total - solved });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Get all submissions for a user
+router.get('/user/submissions', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const submissions = await Submission.find({ user: userId })
+      .populate('problem', 'title difficulty')
+      .sort({ createdAt: -1 });
+    
+    const submissionData = submissions.map(sub => ({
+      _id: sub._id,
+      problem: {
+        _id: sub.problem._id,
+        title: sub.problem.title,
+        difficulty: sub.problem.difficulty
+      },
+      language: sub.language,
+      status: sub.status,
+      submittedAt: sub.createdAt
+    }));
+    
+    res.json(submissionData);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Get specific submission code
+router.get('/submissions/:submissionId', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const submissionId = req.params.submissionId;
+    
+    const submission = await Submission.findOne({ 
+      _id: submissionId, 
+      user: userId 
+    }).populate('problem', 'title difficulty');
+    
+    if (!submission) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+    
+    res.json({
+      _id: submission._id,
+      code: submission.code,
+      language: submission.language,
+      status: submission.status,
+      submittedAt: submission.createdAt,
+      testResults: submission.testResults || [],
+      problem: {
+        _id: submission.problem._id,
+        title: submission.problem.title,
+        difficulty: submission.problem.difficulty
+      }
+    });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

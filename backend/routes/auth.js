@@ -53,7 +53,6 @@ router.post('/register', async (req, res) => {
         if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
             return res.status(400).json({ message: 'Email already registered' });
         }
-        console.error('Register error:', error);
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 });
@@ -146,7 +145,6 @@ router.post('/google', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Google Auth Error:', error);
         res.status(400).json({ message: 'Google authentication failed' });
     }
 });

@@ -5,7 +5,8 @@ const submissionSchema = new mongoose.Schema({
   problem: { type: mongoose.Schema.Types.ObjectId, ref: 'Problem', required: true },
   code: { type: String, required: true },
   language: { type: String, required: true },
-  status: { type: String, enum: ['Submitted', 'Not Attempted'], default: 'Submitted' },
+  status: { type: String, enum: ['Submitted', 'Failed', 'Not Attempted'], default: 'Submitted' },
+  testResults: { type: Array, default: [] }, // Store test results for debugging
   createdAt: { type: Date, default: Date.now }
 });
 
