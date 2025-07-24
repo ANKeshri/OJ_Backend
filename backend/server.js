@@ -10,7 +10,10 @@ dotenv.config({ path: path.join(__dirname, 'config', 'config.env') });
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin:process.env.CLIENT_URL,
+    credentials:true
+}));
 app.use(express.json());
 
 // MongoDB Connection
